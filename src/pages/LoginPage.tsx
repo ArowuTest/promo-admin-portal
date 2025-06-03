@@ -23,7 +23,8 @@ const payload: LoginRequest = { username: username.trim(), password };
       const response = await login({ username, password });
       console.log("✅ login() returned:", response);
       doLogin(response.token);
-      navigate('/draws');
+      navigate("/draws");
+      return;
     } catch (err: any) {
       console.error("❌ Login error caught:", err);
       setError(err.response?.data?.error || 'Login failed');
