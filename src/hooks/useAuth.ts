@@ -1,17 +1,17 @@
 // src/hooks/useAuth.ts
 
 // ─── Import jwt-decode as a namespace ───────────────────────────────────────
-import * as jwt_decode from "jwt-decode";
+import * as jwt_decode from 'jwt-decode';
 
 // This is the key name in localStorage where we store the raw JWT string
-const TOKEN_KEY = "token";
+const TOKEN_KEY = 'token';
 
 export interface DecodedToken {
   user_id: string;
   username: string;
-  role:     string;
-  iat:      number;
-  exp:      number;
+  role: string;
+  iat: number;
+  exp: number;
 }
 
 /**
@@ -36,21 +36,18 @@ export function clearToken() {
 }
 
 /**
- * Decode a JWT string and return { user_id, username, role }.
+ * Decode a JWT string and return { username, role }.
  * If decoding fails, return empty strings.
  */
 export function getUserInfoFromToken(
   token: string
-): { user_id: string; username: string; role: string } {
+): { username: string; role: string } {
   try {
-    // Because we did `import * as jwt_decode`, calling it requires a cast:
+    // Because we imported entire module as a namespace, we must cast to any
+    // in order to call it as a function:
     const decoded = (jwt_decode as any)(token) as DecodedToken;
-    return {
-      user_id:  decoded.user_id,
-      username: decoded.username,
-      role:     decoded.role,
-    };
+    return { username: decoded.username, role: decoded.role };
   } catch {
-    return { user_id: "", username: "", role: "" };
+    return { username: '', role: '' };
   }
 }

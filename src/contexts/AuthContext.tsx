@@ -1,89 +1,69 @@
 // src/contexts/AuthContext.tsx
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { getToken, setToken, clearToken, getUserInfoFromToken } from '@hooks/useAuth';
+import { getToken, setToken as storeToken, clearToken, getUserInfoFromToken } from '@hooks/useAuth';
 
-// Extend what `getUserInfoFromToken(...)` should return:
-// (You’ll likely need to add `user_id` to that function’s returned shape.)
-export interface DecodedUser {
-  user_id:  string;
-  username: string;
-  role:     string;
-}
-
+// We expect login() to receive an object containing { token, role, username }.
+// That way we don't need to re‐decode the token; we can just trust the backend response.
 export interface AuthContextType {
-  token:    string | null;
-  user_id:  string | null;
-  role:     string | null;
+  token: string | null;
+  role: string | null;
   username: string | null;
-  login:   (token: string) => void;
-  logout:  () => void;
+  login: (payload: { token: string; role: string; username: string }) => void;
+  logout: () => void;
 }
 
 export const AuthContext = createContext<AuthContextType>({
-  token:    null,
-  user_id:  null,
-  role:     null,
+  token: null,
+  role: null,
   username: null,
-  login:    () => {},
-  logout:   () => {},
+  login: () => {},
+  logout: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // State fields for all four values
-  const [token,    setTokenState]    = useState<string | null>(null);
-  const [user_id,  setUserId]        = useState<string | null>(null);
-  const [role,     setRole]          = useState<string | null>(null);
-  const [username, setUsernameState] = useState<string | null>(null);
+  const [token, setTokenState] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
 
-  // On mount, read any existing JWT from storage, decode it, and populate the fields
+  // On mount, check localStorage to see if we already have a token.
+  // If so, decode it or rehydrate from it (since backend response returns role + username in token).
   useEffect(() => {
-    const raw = getToken();               // read `localStorage.getItem("token")`
-    if (raw) {
-      const info: DecodedUser = getUserInfoFromToken(raw);
-      if (info) {
-        setTokenState(raw);
-        setUserId(info.user_id);
+    const saved = getToken();
+    if (saved) {
+      // decode the info from token in case user reloads page
+      const info = getUserInfoFromToken(saved);
+      if (info && info.username && info.role) {
+        setTokenState(saved);
         setRole(info.role);
-        setUsernameState(info.username);
+        setUsername(info.username);
       }
     }
   }, []);
 
-  // call this after a successful login: stores token + decodes it
-  const login = (newToken: string) => {
-    // 1) Write the raw JWT into localStorage
-    setToken(newToken);
-
-    // 2) Decode out user_id / username / role
-    const info: DecodedUser = getUserInfoFromToken(newToken);
-
-    // 3) Store everything in React state
+  /**
+   * login() now expects the full payload from the login endpoint,
+   * which contains token, role, and username.
+   **/
+  const login = (payload: { token: string; role: string; username: string }) => {
+    const { token: newToken, role: newRole, username: newUsername } = payload;
+    // persist raw JWT
+    storeToken(newToken);
+    // store in React state
     setTokenState(newToken);
-    setUserId(info.user_id);
-    setRole(info.role);
-    setUsernameState(info.username);
+    setRole(newRole);
+    setUsername(newUsername);
   };
 
   const logout = () => {
-    clearToken();           // remove “token” from localStorage
+    clearToken();
     setTokenState(null);
-    setUserId(null);
     setRole(null);
-    setUsernameState(null);
+    setUsername(null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        token,
-        user_id,
-        role,
-        username,
-        login,
-        logout,
-      }}
-    >
+    <AuthContext.Provider value={{ token, role, username, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
