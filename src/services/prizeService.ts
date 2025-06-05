@@ -1,8 +1,9 @@
-// src/services/prizeService.ts
+// File: src/services/prizeService.ts
+
 import apiClient from './apiClient';
 
 /**
- * PrizeTier exactly matches what the backend returns:
+ * Matches exactly what the backend returns under GET /api/v1/prize-structures
  */
 export interface PrizeTier {
   ID: string;
@@ -10,66 +11,83 @@ export interface PrizeTier {
   TierName: string;
   Amount: number;
   Quantity: number;
-  RunnerUpCount: number;
+  RunnerUpCount: number;   // <— runner-up count is compulsory
   OrderIndex: number;
+  CreatedAt?: string;
+  UpdatedAt?: string;
 }
 
 export interface PrizeStructure {
-  id: string;
-  name: string;
-  effective: string; // e.g. "2025-06-04T00:00:00Z"
-  tiers: PrizeTier[];
+  ID: string;
+  Name: string;
+  Effective: string; // e.g. "2025-06-04T00:00:00Z"
+  CreatedAt?: string;
+  UpdatedAt?: string;
+  Tiers: PrizeTier[];
 }
 
 /**
- * 1) GET /api/v1/prize-structures
+ * Fetch all prize structures 
+ * (GET /api/v1/prize-structures)
  */
 export function fetchPrizeStructures(): Promise<PrizeStructure[]> {
-  return apiClient
-    .get<PrizeStructure[]>('/prize-structures')
-    .then((res) => res.data);
+  return apiClient.get<PrizeStructure[]>('/prize-structures').then((res) => res.data);
 }
 
 /**
- * 2) POST /api/v1/prize-structures
+ * Create a new PrizeStructure
+ * (POST /api/v1/prize-structures)
+ * 
+ * The backend expects:
+ * {
+ *   name: string,
+ *   effective: string,
+ *   tiers: [
+ *     { tier_name: string, amount: number, quantity: number, runner_up_count: number, order_index: number },
+ *     ...
+ *   ]
+ * }
  */
-export interface PrizeStructurePayload {
+export function createPrizeStructure(payload: {
   name: string;
-  effective: string; // "2025-06-04"
+  effective: string;
   tiers: Array<{
-    TierName: string;
-    Amount: number;
-    Quantity: number;
-    RunnerUpCount: number;
-    OrderIndex: number;
+    tier_name: string;
+    amount: number;
+    quantity: number;
+    runner_up_count: number;
+    order_index: number;
   }>;
-}
-
-export function createPrizeStructure(
-  payload: PrizeStructurePayload
-): Promise<PrizeStructure> {
-  return apiClient
-    .post<PrizeStructure>('/prize-structures', payload)
-    .then((res) => res.data);
+}): Promise<PrizeStructure> {
+  return apiClient.post<PrizeStructure>('/prize-structures', payload).then((res) => res.data);
 }
 
 /**
- * 3) PUT /api/v1/prize-structures/:id
+ * Update an existing PrizeStructure
+ * (PUT /api/v1/prize-structures/:id)
  */
 export function updatePrizeStructure(
   id: string,
-  payload: PrizeStructurePayload
+  payload: {
+    name: string;
+    effective: string;
+    tiers: Array<{
+      ID?: string; // if existing tier, include its ID
+      tier_name: string;
+      amount: number;
+      quantity: number;
+      runner_up_count: number;
+      order_index: number;
+    }>;
+  }
 ): Promise<PrizeStructure> {
-  return apiClient
-    .put<PrizeStructure>(`/prize-structures/${id}`, payload)
-    .then((res) => res.data);
+  return apiClient.put<PrizeStructure>(`/prize-structures/${id}`, payload).then((res) => res.data);
 }
 
 /**
- * 4) DELETE /api/v1/prize-structures/:id
+ * Delete a prize structure by ID
+ * (DELETE /api/v1/prize-structures/:id)
  */
 export function deletePrizeStructure(id: string): Promise<void> {
-  return apiClient
-    .delete(`/prize-structures/${id}`)
-    .then(() => {});
+  return apiClient.delete(`/prize-structures/${id}`).then(() => {});
 }

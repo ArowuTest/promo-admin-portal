@@ -1,50 +1,48 @@
 // src/components/DashboardLayout.tsx
+
 import React from 'react';
 import { Link, Outlet } from 'react-router-dom';
-import { useAuthContext } from '../contexts/AuthContext';
+import { useAuthContext } from '@contexts/AuthContext';
 
 export default function DashboardLayout() {
   const { user, logout } = useAuthContext();
 
   return (
-    <div>
+    <div className="min-h-screen flex flex-col">
       {/* Top navigation bar */}
-      <nav
-        style={{
-          backgroundColor: '#333',
-          color: '#fff',
-          padding: '0.5rem 1rem',
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          <Link to="/draws" style={{ color: '#fff', marginRight: '1rem', textDecoration: 'none' }}>
+      <nav className="bg-gray-800 text-white px-6 py-3 flex items-center justify-between">
+        <div className="space-x-4">
+          <Link to="/draws" className="hover:underline">
             Draws
           </Link>
-          <Link to="/upload" style={{ color: '#fff', marginRight: '1rem', textDecoration: 'none' }}>
+          <Link to="/upload" className="hover:underline">
             Upload CSV
           </Link>
-          <Link to="/prizes" style={{ color: '#fff', marginRight: '1rem', textDecoration: 'none' }}>
+          <Link to="/prizes" className="hover:underline">
             Prize Structures
           </Link>
-          <Link to="/winners" style={{ color: '#fff', marginRight: '1rem', textDecoration: 'none' }}>
+          <Link to="/winners" className="hover:underline">
             Winners
           </Link>
-          <Link to="/users" style={{ color: '#fff', marginRight: '1rem', textDecoration: 'none' }}>
+          <Link to="/users" className="hover:underline">
             Users
           </Link>
         </div>
-        <div>
-          <span style={{ marginRight: '1rem' }}>
+        <div className="flex items-center space-x-4">
+          <span>
             {user?.username} ({user?.role})
           </span>
-          <button onClick={logout}>Logout</button>
+          <button
+            onClick={logout}
+            className="bg-red-500 px-3 py-1 rounded hover:bg-red-600 text-sm"
+          >
+            Logout
+          </button>
         </div>
       </nav>
 
       {/* Main content area */}
-      <main style={{ padding: '1.5rem' }}>
+      <main className="flex-1 bg-gray-100 p-6">
         <Outlet />
       </main>
     </div>

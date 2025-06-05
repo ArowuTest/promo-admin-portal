@@ -1,19 +1,21 @@
 // src/services/apiClient.ts
-
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { getToken } from '@hooks/useAuth'; // note: this is a named export
+import { getToken } from '@hooks/useAuth';
 
-// Base URL for all API calls. `VITE_API_BASE_URL` should be something like "https://promo-backend-ensh.onrender.com/api/v1"
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+/**
+ * Base URL for all API calls. 
+ * If VITE_API_BASE_URL is set (e.g. on Vercel), we use that;
+ * otherwise default to local dev.
+ */
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
 
 export const apiClient: AxiosInstance = axios.create({
-  baseURL,
+  baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Attach bearer token if present
 apiClient.interceptors.request.use((config: AxiosRequestConfig) => {
   const token = getToken();
   if (token && config.headers) {

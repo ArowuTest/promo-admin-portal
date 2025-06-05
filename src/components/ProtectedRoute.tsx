@@ -1,25 +1,25 @@
-// src/components/ProtectedRoute.tsx
+import React from "react";
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuthContext } from "@contexts/AuthContext";
 
-import React, { useContext } from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
-import { AuthContext } from '@contexts/AuthContext';
-
-export default function ProtectedRoute({
-  allowedRoles,
-}: {
+interface ProtectedRouteProps {
   allowedRoles: string[];
-}) {
-  const { token, role } = useContext(AuthContext);
+}
 
-  // If no token, redirect to login
+export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
+  // Replace "useAuthContext" with whatever hook your AuthContext file actually provides
+  const { token, role } = useAuthContext();
+
+  // If there's no token at all, force login screen
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
-  // If role not allowed, redirect to login (or show unauthorized)
+  // If role is not among allowedRoles, also redirect to login (or an unauthorized page)
   if (allowedRoles.length > 0 && !allowedRoles.includes(role!)) {
     return <Navigate to="/login" replace />;
   }
 
+  // Otherwise render child routes
   return <Outlet />;
 }
