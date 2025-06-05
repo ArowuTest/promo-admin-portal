@@ -1,41 +1,62 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { fetchWinners } from '@services/winnersService';
-import { WinnerRecord } from '@types/Winner';
-import Spinner from '@components/Spinner';
-import MaskedMSISDN from '@components/MaskedMSISDN';
-import { formatDate } from '@utils/formatDate';
+// src/pages/WinnersPage.tsx
+
+import React, { useState, useEffect } from 'react';
+import { apiClient } from '@services/apiClient';
+
+interface Winner {
+  ID: string;
+  DrawID: string;
+  PrizeTierID: string;
+  MSISDN: string;
+  Position: string;
+  IsRunnerUp: boolean;
+  CreatedAt: string;
+  UpdatedAt: string;
+}
 
 export default function WinnersPage() {
-  const { data, isLoading, error } = useQuery<WinnerRecord[]>(['winners'], fetchWinners);
+  const [winners, setWinners] = useState<Winner[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (isLoading) return <Spinner />;
-  if (error) return <p className="text-red-500">Failed to load winners</p>;
+  useEffect(() => {
+    apiClient
+      .get<Winner[]>('/winners')
+      .then((res) => {
+        setWinners(res.data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.response?.data?.error || 'Failed to fetch winners');
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <p className="p-6">Loading winners...</p>;
+  if (error) return <p className="p-6 text-red-500">{error}</p>;
 
   return (
     <div className="p-6">
       <h2 className="text-2xl font-semibold mb-4">All Winners</h2>
-      <div className="bg-white rounded shadow">
-        <table className="min-w-full border">
+      <div className="bg-white p-4 rounded shadow">
+        <table className="min-w-full table-auto border-collapse">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 py-2 border">Draw ID</th>
-              <th className="px-4 py-2 border">Prize Tier</th>
-              <th className="px-4 py-2 border">Position</th>
               <th className="px-4 py-2 border">MSISDN</th>
-              <th className="px-4 py-2 border">Date</th>
+              <th className="px-4 py-2 border">Position</th>
+              <th className="px-4 py-2 border">Prize Tier ID</th>
+              <th className="px-4 py-2 border">Created At</th>
             </tr>
           </thead>
           <tbody>
-            {data?.map(w => (
-              <tr key={w.id} className="bg-white">
-                <td className="px-4 py-2 border">{w.drawId}</td>
-                <td className="px-4 py-2 border">{w.prizeTier}</td>
-                <td className="px-4 py-2 border">{w.position}</td>
+            {winners.map((w) => (
+              <tr key={w.ID} className="hover:bg-gray-100">
+                <td className="px-4 py-2 border">{w.MSISDN}</td>
+                <td className="px-4 py-2 border">{w.Position}</td>
+                <td className="px-4 py-2 border">{w.PrizeTierID}</td>
                 <td className="px-4 py-2 border">
-                  <MaskedMSISDN msisdn={w.msisdn} />
+                  {new Date(w.CreatedAt).toLocaleString()}
                 </td>
-                <td className="px-4 py-2 border">{formatDate(w.date)}</td>
               </tr>
             ))}
           </tbody>
@@ -44,4 +65,3 @@ export default function WinnersPage() {
     </div>
   );
 }
- 

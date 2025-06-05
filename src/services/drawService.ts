@@ -1,29 +1,43 @@
 // src/services/drawService.ts
-import { apiClient } from "./apiClient";
-import { DrawRequest, DrawResponse } from "@types/Draw";
+import apiClient from './apiClient';
 
-/**
- * Execute a draw. If `payload.msisdn_entries` is present, the backend will
- * run a weighted draw using those CSV entries (each with msisdn + points).
- * Otherwise, it will fetch eligible MSISDNs from PostHog for the given date.
- */
-export function executeDraw(payload: DrawRequest): Promise<DrawResponse> {
-  // The backend expects { draw_date: string, msisdn_entries?: Array<{ msisdn, points }> }
-  const body: any = {
-    draw_date: payload.date,
-  };
-  if (payload.msisdn_entries && payload.msisdn_entries.length > 0) {
-    body.msisdn_entries = payload.msisdn_entries;
-  }
-
-  return apiClient
-    .post<DrawResponse>("/draws/execute", body)
-    .then((res) => res.data);
+export interface CsvUploadPayload {
+  file: File;
+  drawDate: string; // "2025-06-04"
+  prizeStructureID: string;
 }
 
-/** Rerun an existing draw by drawId */
-export function rerunDraw(drawId: string): Promise<DrawResponse> {
+export interface ExecuteDrawPayload {
+  drawDate: string;
+  prizeStructureID: string;
+}
+
+/**
+ * 1) POST /api/v1/draws/upload-csv
+ *    (expects FormData: file, draw_date, prize_structure_id)
+ */
+export function uploadCsvEntries(payload: CsvUploadPayload): Promise<void> {
+  const form = new FormData();
+  form.append('file', payload.file);
+  form.append('draw_date', payload.drawDate);
+  form.append('prize_structure_id', payload.prizeStructureID);
+
   return apiClient
-    .post<DrawResponse>(`/draws/rerun/${drawId}`, {})
-    .then((res) => res.data);
+    .post('/draws/upload-csv', form, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    .then(() => {});
+}
+
+/**
+ * 2) POST /api/v1/draws/execute
+ *    (expects JSON body: { draw_date: string, prize_structure_id: string })
+ */
+export function executeDraw(payload: ExecuteDrawPayload): Promise<void> {
+  return apiClient.post('/draws/execute', {
+    draw_date: payload.drawDate,
+    prize_structure_id: payload.prizeStructureID,
+  }).then(() => {});
 }

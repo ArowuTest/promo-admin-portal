@@ -1,18 +1,13 @@
 // src/hooks/useAuth.ts
 
-// ─── Import jwt-decode as a namespace ───────────────────────────────────────
-import * as jwt_decode from 'jwt-decode';
+// We will store three separate values in localStorage:
+//  - raw JWT under "token"
+//  - username under "username"
+//  - role under "role"
 
-// This is the key name in localStorage where we store the raw JWT string
 const TOKEN_KEY = 'token';
-
-export interface DecodedToken {
-  user_id: string;
-  username: string;
-  role: string;
-  iat: number;
-  exp: number;
-}
+const USERNAME_KEY = 'username';
+const ROLE_KEY = 'role';
 
 /**
  * Save the raw JWT string under 'token' in localStorage.
@@ -29,25 +24,32 @@ export function getToken(): string | null {
 }
 
 /**
- * Remove the JWT from localStorage.
+ * Remove JWT, username, and role from localStorage.
  */
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USERNAME_KEY);
+  localStorage.removeItem(ROLE_KEY);
 }
 
 /**
- * Decode a JWT string and return { username, role }.
- * If decoding fails, return empty strings.
+ * Save username and role in localStorage.
  */
-export function getUserInfoFromToken(
-  token: string
-): { username: string; role: string } {
-  try {
-    // Because we imported entire module as a namespace, we must cast to any
-    // in order to call it as a function:
-    const decoded = (jwt_decode as any)(token) as DecodedToken;
-    return { username: decoded.username, role: decoded.role };
-  } catch {
-    return { username: '', role: '' };
-  }
+export function setUserInfo(username: string, role: string) {
+  localStorage.setItem(USERNAME_KEY, username);
+  localStorage.setItem(ROLE_KEY, role);
+}
+
+/**
+ * Read the stored username from localStorage.
+ */
+export function getStoredUsername(): string | null {
+  return localStorage.getItem(USERNAME_KEY);
+}
+
+/**
+ * Read the stored role from localStorage.
+ */
+export function getStoredRole(): string | null {
+  return localStorage.getItem(ROLE_KEY);
 }

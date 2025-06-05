@@ -1,89 +1,93 @@
 // src/pages/CsvUploadPage.tsx
-
 import React, { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import Papa from 'papaparse'; // or whatever CSV‐parser you already used
-import { uploadCsvEntries } from '@services/drawService'; 
-import Spinner from '@components/Spinner';
-
-interface CsvRow {
-  msisdn: string;
-  points: number;
-}
+import Papa from 'papaparse';
+import { uploadCsvEntries } from '../services/drawService';
 
 export default function CsvUploadPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvCount, setCsvCount] = useState<number>(0);
+  const [drawDate, setDrawDate] = useState<string>('');
+  const [prizeStructureID, setPrizeStructureID] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const uploadMutation = useMutation(uploadCsvEntries, {
-    onSuccess: () => {
-      setSuccess('CSV uploaded successfully.');
-      setError(null);
-    },
-    onError: (err: any) => {
-      setError(err.response?.data?.error || 'CSV upload failed');
-      setSuccess(null);
-    },
-  });
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setError(null);
-    setSuccess(null);
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      setCsvFile(e.target.files[0]);
+      Papa.parse(e.target.files[0], {
+        complete: (results) => {
+          // subtract header
+          setCsvCount(results.data.length - 1);
+        },
+      });
+    } else {
+      setCsvFile(null);
+      setCsvCount(0);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) {
-      setError('Please choose a CSV file first.');
+  const handleSubmit = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    if (!csvFile || !drawDate || !prizeStructureID) {
+      setErrorMsg('Please provide date, prize structure ID, and a CSV file.');
       return;
     }
-    setError(null);
-    setSuccess(null);
-
-    Papa.parse<CsvRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const data = results.data.map((row) => ({
-          msisdn: row.msisdn.trim(),
-          points: Number(row.points),
-        }));
-        uploadMutation.mutate(data);
-      },
-      error: (err) => {
-        setError('Error parsing CSV: ' + err.message);
-      },
-    });
+    try {
+      await uploadCsvEntries({ file: csvFile, drawDate, prizeStructureID });
+      setSuccessMsg(`CSV uploaded (${csvCount} rows)`);
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.error || 'Upload failed');
+    }
   };
 
   return (
-    <div className="max-w-lg mx-auto bg-white p-6 rounded shadow">
-      <h2 className="text-2xl font-semibold mb-4">Upload CSV for Draw Entries</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-gray-700 mb-1">CSV File (msisdn, points)</label>
+    <div>
+      <h1>Upload CSV for Draw</h1>
+      <div style={{ marginBottom: '1rem' }}>
+        <label>
+          Draw Date{' '}
           <input
-            type="file"
-            accept=".csv,text/csv"
-            onChange={handleFileChange}
-            className="w-full border px-3 py-2 rounded"
+            type="date"
+            value={drawDate}
+            onChange={(e) => {
+              setDrawDate(e.target.value);
+              setErrorMsg(null);
+              setSuccessMsg(null);
+            }}
           />
-        </div>
-        <button
-          type="submit"
-          disabled={uploadMutation.isLoading}
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-        >
-          {uploadMutation.isLoading ? <Spinner /> : 'Upload CSV'}
-        </button>
-      </form>
+        </label>
+      </div>
 
-      {error && <p className="mt-4 text-red-500">{error}</p>}
-      {success && <p className="mt-4 text-green-600">{success}</p>}
+      <div style={{ marginBottom: '1rem' }}>
+        <label>
+          Prize Structure ID{' '}
+          <input
+            type="text"
+            placeholder="Paste a Prize Structure ID"
+            value={prizeStructureID}
+            onChange={(e) => setPrizeStructureID(e.target.value)}
+          />
+        </label>
+        <div style={{ fontSize: '0.85rem', color: '#666' }}>
+          (You can also find prize structure IDs on the “Prize Structures” page.)
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '1rem' }}>
+        <label>
+          Select CSV File{' '}
+          <input type="file" accept=".csv" onChange={handleFile} />
+        </label>
+        {csvCount > 0 && <span style={{ marginLeft: '1rem' }}>{csvCount} rows parsed.</span>}
+      </div>
+
+      <button onClick={handleSubmit}>Upload CSV Entries</button>
+
+      {errorMsg && <div style={{ color: 'red', marginTop: '1rem' }}>{errorMsg}</div>}
+      {successMsg && <div style={{ color: 'green', marginTop: '1rem' }}>{successMsg}</div>}
     </div>
   );
 }

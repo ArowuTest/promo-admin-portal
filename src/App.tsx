@@ -1,75 +1,60 @@
 // src/App.tsx
-
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from '@contexts/AuthContext';
-import ProtectedRoute from '@components/ProtectedRoute';
-import DashboardLayout from '@components/DashboardLayout';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuthContext } from './contexts/AuthContext';
 
-import LoginPage from '@pages/LoginPage';
-import DrawManagementPage from '@pages/DrawManagementPage';
-import CsvUploadPage from '@pages/CsvUploadPage';
-import PrizeStructurePage from '@pages/PrizeStructurePage';
-import WinnersPage from '@pages/WinnersPage';
-import UserManagementPage from '@pages/UserManagementPage';
+import LoginPage from './pages/LoginPage';
+import DrawManagementPage from './pages/DrawManagementPage';
+import CsvUploadPage from './pages/CsvUploadPage';
+import PrizeStructurePage from './pages/PrizeStructurePage';
+import WinnersPage from './pages/WinnersPage';
+import UserManagementPage from './pages/UserManagementPage';
 
-function App() {
-  return (
-    <AuthProvider>
-      <Routes>
-        {/* Public route: /login */}
-        <Route path="/login" element={<LoginPage />} />
+import DashboardLayout from './components/DashboardLayout';
 
-        {/* Protected area – wraps a DashboardLayout which has a nav bar. */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                'SUPERADMIN',
-                'ADMIN',
-                'SENIORUSER',
-                'WINNERREPORTS',
-                'ALLREPORTS',
-              ]}
-            >
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          {/* Default redirect from “/” to “/draws” */}
-          <Route index element={<Navigate to="draws" replace />} />
-
-          {/* Draws page (pick date/prize, run draw) */}
-          <Route path="draws" element={<DrawManagementPage />} />
-
-          {/* Separate “Upload CSV” page */}
-          <Route path="upload-csv" element={<CsvUploadPage />} />
-
-          {/* Prize Structures page */}
-          <Route path="prizes" element={<PrizeStructurePage />} />
-
-          {/* Winners page */}
-          <Route path="winners" element={<WinnersPage />} />
-        </Route>
-
-        {/* User management – only SUPERADMIN can access */}
-        <Route
-          path="/users/*"
-          element={
-            <ProtectedRoute allowedRoles={['SUPERADMIN']}>
-              <DashboardLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<UserManagementPage />} />
-        </Route>
-
-        {/* Fallback: redirect unknown to / */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AuthProvider>
-  );
+function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const { user } = useAuthContext();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public */}
+          <Route path="/login" element={<LoginPage />} />
+
+          {/* Protected / Dashboard routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            {/* This is where DashboardLayout’s <Outlet/> will render: */}
+
+            <Route index element={<Navigate to="draws" replace />} />
+
+            <Route path="draws" element={<DrawManagementPage />} />
+            <Route path="upload" element={<CsvUploadPage />} />
+            <Route path="prizes" element={<PrizeStructurePage />} />
+            <Route path="winners" element={<WinnersPage />} />
+            <Route path="users" element={<UserManagementPage />} />
+
+            {/* Any unknown child of “/” goes back to /draws */}
+            <Route path="*" element={<Navigate to="draws" replace />} />
+          </Route>
+
+          {/* Catch any other unknown path → to /login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}

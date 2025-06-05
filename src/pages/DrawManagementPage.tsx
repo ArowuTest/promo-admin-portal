@@ -1,143 +1,153 @@
 // src/pages/DrawManagementPage.tsx
-
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { fetchPrizeStructures } from '@services/prizeService';
-import { executeDraw } from '@services/drawService';
-import Spinner from '@components/Spinner';
-import MaskedMSISDN from '@components/MaskedMSISDN';
-import { DrawResponse, DrawEntry } from '@types/Draw';
+import { useAuthContext } from '../contexts/AuthContext';
+import { executeDraw, uploadCsvEntries } from '../services/drawService';
+import { fetchPrizeStructures } from '../services/prizeService';
+import { PrizeStructure } from '../services/prizeService';
 
 export default function DrawManagementPage() {
-  // 1) State for picking a date
-  const [selectedDate, setSelectedDate] = useState<string>('');
-  // 2) Prize‐structure that matches that date (by ID)
-  const [selectedPrizeId, setSelectedPrizeId] = useState<string>('');
-  // 3) Once we execute, we’ll store the draw result here:
-  const [result, setResult] = useState<DrawResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [showAnimation, setShowAnimation] = useState(false);
+  const { getToken } = useAuthContext();
+  const [drawDate, setDrawDate] = useState<string>('');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvCount, setCsvCount] = useState<number>(0);
+  const [prizeStructures, setPrizeStructures] = useState<PrizeStructure[]>([]);
+  const [selectedPrizeID, setSelectedPrizeID] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Fetch all prize structures (so we can filter for “effective == selectedDate”)
-  const { data: structures } = useQuery(['prizeStructures'], fetchPrizeStructures);
-
-  // Mutation: execute draw
-  const drawMutation = useMutation(executeDraw, {
-    onSuccess: (data: DrawResponse) => {
-      setShowAnimation(false);
-      setResult(data);
-    },
-    onError: (err: any) => {
-      setShowAnimation(false);
-      setError(err.response?.data?.error || 'Draw failed');
-    },
-  });
-
-  // Whenever you pick a date, auto‐select the matching prize structure (if any)
+  // Whenever drawDate changes, fetch prize‐structures whose effective == drawDate
   useEffect(() => {
-    if (!structures) return;
-    const match = structures.find((ps: any) => {
-      // both are ISO‐strings; compare only “YYYY‐MM‐DD”
-      return ps.effective.startsWith(selectedDate);
-    });
-    setSelectedPrizeId(match ? match.ID : '');
-  }, [selectedDate, structures]);
+    setPrizeStructures([]);
+    setSelectedPrizeID('');
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    if (drawDate) {
+      fetchPrizeStructures()
+        .then((all) => {
+          // Filter for exact match on day (backend returns ISO8601 "2025-06-04T00:00:00Z")
+          const matching = all.filter((ps) => {
+            // Only compare YYYY-MM-DD
+            const eff = ps.effective.split('T')[0];
+            return eff === drawDate;
+          });
+          setPrizeStructures(matching);
+          if (matching.length === 1) {
+            setSelectedPrizeID(matching[0].id);
+          }
+        })
+        .catch(() => {
+          setErrorMsg('Failed to load prize structures');
+        });
+    }
+  }, [drawDate]);
 
-  const handleExecute = () => {
-    if (!selectedDate || !selectedPrizeId) {
-      setError('Please choose a valid date and prize structure first.');
+  const handleCsvChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSuccessMsg(null);
+    setErrorMsg(null);
+    if (e.target.files && e.target.files.length > 0) {
+      setCsvFile(e.target.files[0]);
+      // Count lines in the uploaded CSV
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const text = evt.target?.result as string;
+        const rows = text.split(/\r?\n/).filter((r) => r.trim() !== '');
+        setCsvCount(rows.length - 1); // subtract header
+      };
+      reader.readAsText(e.target.files[0]);
+    } else {
+      setCsvFile(null);
+      setCsvCount(0);
+    }
+  };
+
+  const handleExecute = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!drawDate) {
+      setErrorMsg('Please select a draw date.');
       return;
     }
-    setError(null);
-    setResult(null);
-    setShowAnimation(true);
+    if (!selectedPrizeID) {
+      setErrorMsg('Select a prize structure for that date.');
+      return;
+    }
 
-    // Fake 3‐second animation, then call API
-    setTimeout(() => {
-      drawMutation.mutate({
-        date: selectedDate,
-        prize_structure_id: selectedPrizeId,
-      });
-    }, 3000);
+    try {
+      // First, if CSV was provided, upload entries
+      if (csvFile) {
+        await uploadCsvEntries({
+          file: csvFile,
+          drawDate,
+          prizeStructureID: selectedPrizeID,
+        });
+        setSuccessMsg(`CSV uploaded: ${csvCount} rows`);
+      }
+
+      // Then trigger the draw
+      await executeDraw({ drawDate, prizeStructureID: selectedPrizeID });
+      setSuccessMsg('Draw executed successfully.');
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error || 'Draw failed (check that a prize structure exists for this date)';
+      setErrorMsg(msg);
+    }
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white p-6 rounded shadow">
-      <h2 className="text-2xl font-semibold mb-4">Draw Management</h2>
+    <div>
+      <h1>Draw Management</h1>
 
-      {/* 1) Date selector */}
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1">Draw Date</label>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="w-full border px-3 py-2 rounded"
-        />
+      <div style={{ marginBottom: '1rem' }}>
+        <label>
+          Select Draw Date{' '}
+          <input
+            type="date"
+            value={drawDate}
+            onChange={(e) => {
+              setDrawDate(e.target.value);
+              setErrorMsg(null);
+              setSuccessMsg(null);
+            }}
+          />
+        </label>
       </div>
 
-      {/* 2) Prize‐structure dropdown (only show when structures are loaded) */}
-      <div className="mb-4">
-        <label className="block text-gray-700 mb-1">Prize Structure</label>
-        <select
-          value={selectedPrizeId}
-          onChange={(e) => setSelectedPrizeId(e.target.value)}
-          className="w-full border px-3 py-2 rounded"
-        >
-          <option value="">-- Choose structure for that date --</option>
-          {structures?.map((ps: any) => (
-            <option key={ps.ID} value={ps.ID}>
-              {ps.Name} (Effective {ps.effective.slice(0, 10)})
-            </option>
-          ))}
-        </select>
-      </div>
+      {drawDate && (
+        <>
+          <div style={{ marginBottom: '0.5rem' }}>
+            Prize Structure:{' '}
+            {prizeStructures.length === 0 ? (
+              <span>No prize structure defined for this date</span>
+            ) : (
+              <select
+                value={selectedPrizeID}
+                onChange={(e) => setSelectedPrizeID(e.target.value)}
+              >
+                <option value="">-- Choose structure –</option>
+                {prizeStructures.map((ps) => (
+                  <option key={ps.id} value={ps.id}>
+                    {ps.name} ({ps.tiers.length} tiers)
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
 
-      {/* 3) Button to execute */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleExecute}
-          disabled={drawMutation.isLoading || showAnimation}
-          className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-        >
-          {showAnimation ? <Spinner /> : 'Execute Draw'}
-        </button>
-      </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label>
+              Upload CSV (Optional){' '}
+              <input type="file" accept=".csv" onChange={handleCsvChange} />
+            </label>
+            {csvCount > 0 && <span style={{ marginLeft: '1rem' }}>{csvCount} rows loaded.</span>}
+          </div>
 
-      {/* 4) Error message if API fails */}
-      {error && <p className="mt-3 text-red-500">{error}</p>}
-
-      {/* 5) Show results if draw succeeded */}
-      {result && (
-        <div className="mt-6 border-t pt-4">
-          <h3 className="text-xl font-semibold mb-2">
-            Draw Results for {result.date}
-          </h3>
-          <table className="min-w-full border">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 border">Prize Tier</th>
-                <th className="px-4 py-2 border">Position</th>
-                <th className="px-4 py-2 border">MSISDN</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.winners.map((w: DrawEntry, idx: number) => (
-                <tr
-                  key={idx}
-                  className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
-                >
-                  <td className="px-4 py-2 border">{w.prizeTier}</td>
-                  <td className="px-4 py-2 border">{w.position}</td>
-                  <td className="px-4 py-2 border">
-                    <MaskedMSISDN msisdn={w.msisdn} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <button onClick={handleExecute}>Execute Draw</button>
+        </>
       )}
+
+      {errorMsg && <div style={{ color: 'red', marginTop: '1rem' }}>{errorMsg}</div>}
+      {successMsg && <div style={{ color: 'green', marginTop: '1rem' }}>{successMsg}</div>}
     </div>
   );
 }

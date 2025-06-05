@@ -1,70 +1,62 @@
 // src/contexts/AuthContext.tsx
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import jwt_decode from 'jwt-decode';
+import { login as apiLogin } from '../services/authService'; // assume you have an authService that POSTs to /admin/login
+import { useNavigate } from 'react-router-dom';
 
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { getToken, setToken as storeToken, clearToken, getUserInfoFromToken } from '@hooks/useAuth';
-
-// We expect login() to receive an object containing { token, role, username }.
-// That way we don't need to re‐decode the token; we can just trust the backend response.
-export interface AuthContextType {
-  token: string | null;
-  role: string | null;
-  username: string | null;
-  login: (payload: { token: string; role: string; username: string }) => void;
-  logout: () => void;
+interface AuthUser {
+  username: string;
+  role: string;
+  user_id: string;
+  token: string;
 }
 
-export const AuthContext = createContext<AuthContextType>({
-  token: null,
-  role: null,
-  username: null,
-  login: () => {},
-  logout: () => {},
-});
+interface AuthContextType {
+  user: AuthUser | null;
+  login: (data: AuthUser) => void;
+  logout: () => void;
+  getToken: () => string | null;
+}
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [token, setTokenState] = useState<string | null>(null);
-  const [role, setRole] = useState<string | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-  // On mount, check localStorage to see if we already have a token.
-  // If so, decode it or rehydrate from it (since backend response returns role + username in token).
-  useEffect(() => {
-    const saved = getToken();
-    if (saved) {
-      // decode the info from token in case user reloads page
-      const info = getUserInfoFromToken(saved);
-      if (info && info.username && info.role) {
-        setTokenState(saved);
-        setRole(info.role);
-        setUsername(info.username);
-      }
-    }
-  }, []);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const stored = localStorage.getItem('promoAuth');
+    return stored ? JSON.parse(stored) : null;
+  });
 
-  /**
-   * login() now expects the full payload from the login endpoint,
-   * which contains token, role, and username.
-   **/
-  const login = (payload: { token: string; role: string; username: string }) => {
-    const { token: newToken, role: newRole, username: newUsername } = payload;
-    // persist raw JWT
-    storeToken(newToken);
-    // store in React state
-    setTokenState(newToken);
-    setRole(newRole);
-    setUsername(newUsername);
-  };
+  const navigate = useNavigate();
 
-  const logout = () => {
-    clearToken();
-    setTokenState(null);
-    setRole(null);
-    setUsername(null);
-  };
+  function login(data: AuthUser) {
+    // data contains { token, username, role, user_id }
+    setUser(data);
+    localStorage.setItem('promoAuth', JSON.stringify(data));
+    // After login, redirect into dashboard home (e.g. /draws)
+    navigate('/draws');
+  }
+
+  function logout() {
+    setUser(null);
+    localStorage.removeItem('promoAuth');
+    navigate('/login');
+  }
+
+  function getToken() {
+    return user?.token || null;
+  }
 
   return (
-    <AuthContext.Provider value={{ token, role, username, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout, getToken }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
+
+export function useAuthContext() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error('useAuthContext must be used within AuthProvider');
+  }
+  return ctx;
+}
