@@ -1,93 +1,27 @@
-// File: src/services/prizeService.ts
-
 import apiClient from './apiClient';
+import type { PrizeStructure, PrizeStructurePayload } from '@types/Prize';
 
-/**
- * Matches exactly what the backend returns under GET /api/v1/prize-structures
- */
-export interface PrizeTier {
-  ID: string;
-  PrizeStructureID: string;
-  TierName: string;
-  Amount: number;
-  Quantity: number;
-  RunnerUpCount: number;   // <— runner-up count is compulsory
-  OrderIndex: number;
-  CreatedAt?: string;
-  UpdatedAt?: string;
-}
+export const fetchPrizeStructures = async (): Promise<PrizeStructure[]> => {
+    const response = await apiClient.get<PrizeStructure[]>('/prize-structures');
+    return response.data;
+};
 
-export interface PrizeStructure {
-  ID: string;
-  Name: string;
-  Effective: string; // e.g. "2025-06-04T00:00:00Z"
-  CreatedAt?: string;
-  UpdatedAt?: string;
-  Tiers: PrizeTier[];
-}
+// New function to get valid prize structures for a specific date
+export const fetchValidPrizeStructuresForDate = async (date: string): Promise<PrizeStructure[]> => {
+    const response = await apiClient.get<PrizeStructure[]>(`/prize-structures?date=${date}`);
+    return response.data;
+};
 
-/**
- * Fetch all prize structures 
- * (GET /api/v1/prize-structures)
- */
-export function fetchPrizeStructures(): Promise<PrizeStructure[]> {
-  return apiClient.get<PrizeStructure[]>('/prize-structures').then((res) => res.data);
-}
+export const createPrizeStructure = async (payload: PrizeStructurePayload): Promise<PrizeStructure> => {
+    const response = await apiClient.post<PrizeStructure>('/prize-structures', payload);
+    return response.data;
+};
 
-/**
- * Create a new PrizeStructure
- * (POST /api/v1/prize-structures)
- * 
- * The backend expects:
- * {
- *   name: string,
- *   effective: string,
- *   tiers: [
- *     { tier_name: string, amount: number, quantity: number, runner_up_count: number, order_index: number },
- *     ...
- *   ]
- * }
- */
-export function createPrizeStructure(payload: {
-  name: string;
-  effective: string;
-  tiers: Array<{
-    tier_name: string;
-    amount: number;
-    quantity: number;
-    runner_up_count: number;
-    order_index: number;
-  }>;
-}): Promise<PrizeStructure> {
-  return apiClient.post<PrizeStructure>('/prize-structures', payload).then((res) => res.data);
-}
+export const updatePrizeStructure = async ({ id, payload }: { id: string, payload: PrizeStructurePayload }): Promise<PrizeStructure> => {
+    const response = await apiClient.put<PrizeStructure>(`/prize-structures/${id}`, payload);
+    return response.data;
+};
 
-/**
- * Update an existing PrizeStructure
- * (PUT /api/v1/prize-structures/:id)
- */
-export function updatePrizeStructure(
-  id: string,
-  payload: {
-    name: string;
-    effective: string;
-    tiers: Array<{
-      ID?: string; // if existing tier, include its ID
-      tier_name: string;
-      amount: number;
-      quantity: number;
-      runner_up_count: number;
-      order_index: number;
-    }>;
-  }
-): Promise<PrizeStructure> {
-  return apiClient.put<PrizeStructure>(`/prize-structures/${id}`, payload).then((res) => res.data);
-}
-
-/**
- * Delete a prize structure by ID
- * (DELETE /api/v1/prize-structures/:id)
- */
-export function deletePrizeStructure(id: string): Promise<void> {
-  return apiClient.delete(`/prize-structures/${id}`).then(() => {});
-}
+export const deletePrizeStructure = async (id: string): Promise<void> => {
+    await apiClient.delete(`/prize-structures/${id}`);
+};

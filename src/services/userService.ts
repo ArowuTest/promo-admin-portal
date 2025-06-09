@@ -1,19 +1,21 @@
-import { apiClient } from './apiClient';
-import { AdminUser, CreateUserPayload, UpdateUserPayload } from '@types/User';
+import apiClient from './apiClient';
+import type { AdminUser, CreateUserPayload, UpdateUserPayload } from '@types/User';
 
-export function fetchUsers(): Promise<AdminUser[]> {
-  return apiClient.get<AdminUser[]>('/admin/users').then(res => res.data);
-}
+export const fetchUsers = async (): Promise<AdminUser[]> => {
+  const response = await apiClient.get<AdminUser[]>('/admin/users');
+  return response.data;
+};
 
-export function createUser(data: CreateUserPayload): Promise<AdminUser> {
-  return apiClient.post<AdminUser>('/admin/users', data).then(res => res.data);
-}
+export const createUser = async (data: CreateUserPayload): Promise<AdminUser> => {
+  const response = await apiClient.post<AdminUser>('/admin/users', data);
+  return response.data;
+};
 
-export function updateUser(id: string, data: UpdateUserPayload): Promise<AdminUser> {
-  return apiClient.put<AdminUser>(`/admin/users/${id}`, data).then(res => res.data);
-}
+export const updateUser = async (id: string, data: UpdateUserPayload): Promise<AdminUser> => {
+  const response = await apiClient.put<AdminUser>(`/admin/users/${id}`, data);
+  return response.data;
+};
 
-export function deleteUser(id: string): Promise<void> {
-  return apiClient.delete(`/admin/users/${id}`).then(() => {});
-}
- 
+export const deleteUser = async (id: string): Promise<void> => {
+  await apiClient.delete(`/admin/users/${id}`);
+};

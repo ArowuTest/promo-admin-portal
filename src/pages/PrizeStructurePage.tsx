@@ -1,252 +1,188 @@
-// src/pages/PrizeStructurePage.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchPrizeStructures,
   createPrizeStructure,
-  deletePrizeStructure,
   updatePrizeStructure,
-  PrizeStructure,
-  PrizeTier,
-} from '../services/prizeService';
+  deletePrizeStructure,
+} from '@services/prizeService';
+import type { PrizeStructure, PrizeTierPayload, PrizeStructurePayload } from '@types/Prize';
+import Spinner from '@components/Spinner';
+import { PlusIcon, TrashIcon } from '@heroicons/react/20/solid';
+
+const emptyFormState: PrizeStructurePayload = {
+  name: '',
+  effective: new Date().toISOString().split('T')[0],
+  eligible_days: [],
+  tiers: [],
+};
+
+const ALL_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function PrizeStructurePage() {
-  const [structures, setStructures] = useState<PrizeStructure[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Form state for creating/editing
-  const [formName, setFormName] = useState<string>('');
-  const [formDate, setFormDate] = useState<string>('');
-  const [formTiers, setFormTiers] = useState<PrizeTier[]>([]); // each tier has TierName, Amount, Quantity, RunnerUpCount, OrderIndex
+  const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [formValues, setFormValues] = useState<PrizeStructurePayload>(emptyFormState);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const refreshList = () => {
-    setLoading(true);
-    fetchPrizeStructures()
-      .then((all) => {
-        setStructures(all);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError('Failed to load prize structures');
-        setLoading(false);
-      });
+  const { data: structures, isLoading, isError, error } = useQuery<PrizeStructure[], Error>({
+    queryKey: ['prize-structures'],
+    queryFn: fetchPrizeStructures,
+  });
+
+  const mutationOptions = {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['prize-structures'] });
+      resetForm();
+    },
+    onError: (err: any) => {
+      setFormError(err.response?.data?.error || 'An unexpected error occurred.');
+    },
   };
 
-  useEffect(() => {
-    refreshList();
-  }, []);
+  const createMutation = useMutation({ mutationFn: createPrizeStructure, ...mutationOptions });
+  const updateMutation = useMutation({ mutationFn: (vars: { id: string; payload: PrizeStructurePayload }) => updatePrizeStructure(vars), ...mutationOptions });
+  const deleteMutation = useMutation({ mutationFn: deletePrizeStructure, ...mutationOptions });
+
+  const handleDayToggle = (day: string) => {
+    setFormValues(prev => ({
+      ...prev,
+      eligible_days: prev.eligible_days.includes(day)
+        ? prev.eligible_days.filter(d => d !== day)
+        : [...prev.eligible_days, day],
+    }));
+  };
+
+  const handleTierChange = (index: number, field: keyof PrizeTierPayload, value: string | number) => {
+    const newTiers = [...formValues.tiers];
+    const typedValue = (field === 'amount' || field === 'quantity' || field === 'runner_up_count' || field === 'order_index') ? Number(value) : value;
+    newTiers[index] = { ...newTiers[index], [field]: typedValue };
+    setFormValues({ ...formValues, tiers: newTiers });
+  };
+
+  const addTier = () => {
+    const newTier: PrizeTierPayload = { tier_name: '', amount: 0, quantity: 1, runner_up_count: 0, order_index: formValues.tiers.length + 1 };
+    setFormValues({ ...formValues, tiers: [...formValues.tiers, newTier] });
+  };
+  
+  const removeTier = (index: number) => {
+    setFormValues(prev => ({ ...prev, tiers: prev.tiers.filter((_, i) => i !== index) }));
+  };
 
   const resetForm = () => {
-    setFormName('');
-    setFormDate('');
-    setFormTiers([]);
     setEditingId(null);
-  };
-
-  const handleAddTier = () => {
-    setFormTiers([
-      ...formTiers,
-      {
-        ID: '',
-        PrizeStructureID: '',
-        TierName: '',
-        Amount: 0,
-        Quantity: 1,
-        RunnerUpCount: 0,
-        OrderIndex: formTiers.length + 1,
-      },
-    ]);
-  };
-
-  const handleTierChange = (
-    idx: number,
-    key: keyof PrizeTier,
-    value: string | number
-  ) => {
-    const newTiers = [...formTiers];
-    // @ts-ignore
-    newTiers[idx][key] = value;
-    setFormTiers(newTiers);
-  };
-
-  const handleSubmit = async () => {
-    setError(null);
-    const payload = {
-      name: formName,
-      effective: formDate, // e.g. "2025-06-04"
-      tiers: formTiers.map((t, idx) => ({
-        TierName: t.TierName,
-        Amount: t.Amount,
-        Quantity: t.Quantity,
-        RunnerUpCount: t.RunnerUpCount,
-        OrderIndex: idx + 1,
-      })),
-    };
-
-    try {
-      if (editingId) {
-        await updatePrizeStructure(editingId, payload);
-      } else {
-        await createPrizeStructure(payload);
-      }
-      resetForm();
-      refreshList();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save');
-    }
+    setFormValues(emptyFormState);
+    setFormError(null);
   };
 
   const startEdit = (ps: PrizeStructure) => {
-    setEditingId(ps.id);
-    setFormName(ps.name);
-    setFormDate(ps.effective.split('T')[0]);
-    setFormTiers(
-      ps.tiers.map((t) => ({
-        ID: t.ID,
-        PrizeStructureID: ps.id,
-        TierName: t.TierName,
-        Amount: t.Amount,
-        Quantity: t.Quantity,
-        RunnerUpCount: t.RunnerUpCount,
-        OrderIndex: t.OrderIndex,
-      }))
-    );
-  };
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setEditingId(ps.ID);
+    setFormValues({
+        name: ps.Name,
+        effective: ps.Effective.split('T')[0],
+        eligible_days: ps.EligibleDays || [], // Ensure eligible_days is an array
+        tiers: ps.Tiers.map(t => ({
+            tier_name: t.TierName,
+            amount: t.Amount,
+            quantity: t.Quantity,
+            runner_up_count: t.RunnerUpCount,
+            order_index: t.OrderIndex,
+        }))
+    });
+  }
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this prize structure?')) return;
-    try {
-      await deletePrizeStructure(id);
-      refreshList();
-    } catch {
-      setError('Failed to delete');
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    if (formValues.tiers.length === 0 || formValues.eligible_days.length === 0) {
+      setFormError("A prize structure must have at least one tier and one eligible day.");
+      return;
+    }
+
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, payload: formValues });
+    } else {
+      createMutation.mutate(formValues);
     }
   };
-
+  
   return (
-    <div>
-      <h1>Prize Structures</h1>
-
-      {error && <div style={{ color: 'red' }}>{error}</div>}
-
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h2>{editingId ? 'Edit Prize Structure' : 'Create Prize Structure'}</h2>
-        <div>
-          <label>
-            Name{' '}
-            <input
-              type="text"
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-            />
-          </label>
-        </div>
-        <div>
-          <label>
-            Effective Date{' '}
-            <input
-              type="date"
-              value={formDate}
-              onChange={(e) => setFormDate(e.target.value)}
-            />
-          </label>
-        </div>
-
-        <div style={{ marginTop: '1rem' }}>
-          <h3>Tiers</h3>
-          {formTiers.map((t, idx) => (
-            <div
-              key={idx}
-              style={{
-                border: '1px solid #ccc',
-                padding: '0.5rem',
-                marginBottom: '0.5rem',
-              }}
-            >
+    <div className="space-y-8">
+      {/* Form Section */}
+      <form onSubmit={handleSubmit} className="bg-white shadow-md rounded-lg p-6 space-y-6">
+          <h2 className="text-xl font-bold text-gray-800">{editingId ? 'Edit Structure' : 'Create New Prize Structure'}</h2>
+          {formError && <p className="text-red-600 bg-red-50 p-3 rounded-md text-sm">{formError}</p>}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label>
-                  Tier Name:{' '}
-                  <input
-                    type="text"
-                    value={t.TierName}
-                    onChange={(e) => handleTierChange(idx, 'TierName', e.target.value)}
-                  />
-                </label>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">Structure Name</label>
+                  <input type="text" id="name" placeholder="e.g., Weekday Draw" value={formValues.name} onChange={e => setFormValues({...formValues, name: e.target.value})} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"/>
               </div>
               <div>
-                <label>
-                  Amount:{' '}
-                  <input
-                    type="number"
-                    value={t.Amount}
-                    onChange={(e) => handleTierChange(idx, 'Amount', Number(e.target.value))}
-                  />
-                </label>
+                  <label htmlFor="effective" className="block text-sm font-medium text-gray-700">Effective From Date</label>
+                  <input type="date" id="effective" value={formValues.effective} onChange={e => setFormValues({...formValues, effective: e.target.value})} required className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"/>
               </div>
-              <div>
-                <label>
-                  # Winners (Quantity):{' '}
-                  <input
-                    type="number"
-                    value={t.Quantity}
-                    onChange={(e) =>
-                      handleTierChange(idx, 'Quantity', Number(e.target.value))
-                    }
-                  />
-                </label>
-              </div>
-              <div>
-                <label>
-                  # Runner‐ups:{' '}
-                  <input
-                    type="number"
-                    value={t.RunnerUpCount}
-                    onChange={(e) =>
-                      handleTierChange(idx, 'RunnerUpCount', Number(e.target.value))
-                    }
-                  />
-                </label>
-              </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Eligible Days</label>
+            <div className="mt-2 grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {ALL_DAYS.map(day => (
+                <button type="button" key={day} onClick={() => handleDayToggle(day)}
+                  className={`px-3 py-2 text-sm rounded-md border ${formValues.eligible_days.includes(day) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300'}`}>
+                  {day.substring(0,3)}
+                </button>
+              ))}
             </div>
-          ))}
-          <button onClick={handleAddTier}>+ Add Tier</button>
+          </div>
+          <hr/>
+          <h3 className="text-lg font-medium text-gray-700">Tiers</h3>
+          <div className="space-y-3">
+              {formValues.tiers.map((tier, index) => (
+                  <div key={index} className="grid grid-cols-2 md:grid-cols-5 gap-2 border p-4 rounded-md relative bg-gray-50">
+                      <button type="button" onClick={() => removeTier(index)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500"><TrashIcon className="h-5 w-5"/></button>
+                      <div className="col-span-2 md:col-span-2"><label className="text-xs text-gray-500">Tier Name</label><input type="text" placeholder="e.g., Jackpot" value={tier.tier_name} onChange={e => handleTierChange(index, 'tier_name', e.target.value)} className="w-full text-sm rounded-md border-gray-300 mt-1"/></div>
+                      <div><label className="text-xs text-gray-500">Prize Amount</label><input type="number" placeholder="Amount" value={tier.amount} onChange={e => handleTierChange(index, 'amount', e.target.value)} className="w-full text-sm rounded-md border-gray-300 mt-1"/></div>
+                      <div><label className="text-xs text-gray-500"># of Winners</label><input type="number" placeholder="Quantity" value={tier.quantity} onChange={e => handleTierChange(index, 'quantity', e.target.value)} className="w-full text-sm rounded-md border-gray-300 mt-1"/></div>
+                      <div><label className="text-xs text-gray-500"># of Runners-up</label><input type="number" placeholder="Runner-ups" value={tier.runner_up_count} onChange={e => handleTierChange(index, 'runner_up_count', e.target.value)} className="w-full text-sm rounded-md border-gray-300 mt-1"/></div>
+                  </div>
+              ))}
+          </div>
+          <button type="button" onClick={addTier} className="w-full flex items-center justify-center space-x-2 text-sm text-indigo-600 border-2 border-dashed border-gray-300 rounded-md py-2 hover:bg-indigo-50"><PlusIcon className="h-5 w-5"/><span>Add Tier</span></button>
+          <div className="flex justify-end space-x-2 pt-4">
+              {editingId && <button type="button" onClick={resetForm} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300">Cancel</button>}
+              <button type="submit" disabled={createMutation.isLoading || updateMutation.isLoading} className="w-36 justify-center flex bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-indigo-400">{createMutation.isLoading || updateMutation.isLoading ? <Spinner/> : (editingId ? 'Update Structure' : 'Save Structure')}</button>
+          </div>
+      </form>
+      
+      {/* List Section */}
+      <div className="bg-white shadow-md rounded-lg mt-8">
+        <div className="p-6"><h1 className="text-xl font-bold text-gray-800">Existing Prize Structures</h1></div>
+        <div className="space-y-4 p-6">
+            {isLoading && <div className="flex justify-center"><Spinner /></div>}
+            {isError && <p className="text-red-500">Error loading structures: {error.message}</p>}
+            
+            {/* THIS IS THE FIX: Check if 'structures' exists before trying to map it. */}
+            {structures && structures.map((ps) => (
+                <div key={ps.ID} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="font-bold text-lg text-indigo-700">{ps.Name}</p>
+                            <p className="text-sm text-gray-500">Effective Since: {new Date(ps.Effective).toLocaleDateString()}</p>
+                            <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-gray-700">Applies to:</span>
+                                {/* Also check if EligibleDays is not null before mapping */}
+                                {ps.EligibleDays && ps.EligibleDays.map(day => <span key={day} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{day}</span>)}
+                            </div>
+                        </div>
+                        <div className="flex space-x-2 flex-shrink-0">
+                            <button onClick={() => startEdit(ps)} className="text-sm bg-yellow-500 text-white px-3 py-1 rounded-md hover:bg-yellow-600">Edit</button>
+                            <button onClick={() => {if(window.confirm('Are you sure?')) deleteMutation.mutate(ps.ID)}} disabled={deleteMutation.isLoading} className="text-sm bg-red-600 text-white px-3 py-1 rounded-md hover:bg-red-700">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            ))}
         </div>
-
-        <button style={{ marginTop: '1rem' }} onClick={handleSubmit}>
-          {editingId ? 'Update Structure' : 'Create Structure'}
-        </button>
       </div>
-
-      <hr />
-
-      <h2>Existing Prize Structures</h2>
-      {loading ? (
-        <div>Loading…</div>
-      ) : structures.length === 0 ? (
-        <div>No prize structures defined.</div>
-      ) : (
-        <ul>
-          {structures.map((ps) => (
-            <li key={ps.id} style={{ marginBottom: '1rem' }}>
-              <strong>{ps.name}</strong> (Effective: {ps.effective.split('T')[0]}) – 
-              {ps.tiers.length} tier(s)
-              <button
-                style={{ marginLeft: '1rem' }}
-                onClick={() => startEdit(ps)}
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDelete(ps.id)}
-                style={{ marginLeft: '0.5rem', color: 'red' }}
-              >
-                Delete
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

@@ -1,62 +1,85 @@
-// src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import jwt_decode from 'jwt-decode';
-import { login as apiLogin } from '../services/authService'; // assume you have an authService that POSTs to /admin/login
-import { useNavigate } from 'react-router-dom';
+import React, { createContext, useState, useEffect, ReactNode, useContext } from 'react';
+import { jwtDecode } from 'jwt-decode';
+import * as authService from '@services/authService';
+
+interface DecodedToken {
+  user_id: string;
+  username: string;
+  role: 'SUPERADMIN' | 'ADMIN' | 'SENIORUSER' | 'WINNERREPORTS' | 'ALLREPORTS';
+  exp: number;
+}
 
 interface AuthUser {
+  id: string;
   username: string;
-  role: string;
-  user_id: string;
-  token: string;
+  role: DecodedToken['role'];
 }
 
 interface AuthContextType {
+  token: string | null;
   user: AuthUser | null;
-  login: (data: AuthUser) => void;
+  login: (payload: authService.LoginRequest) => Promise<void>;
   logout: () => void;
-  getToken: () => string | null;
+  isLoading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const stored = localStorage.getItem('promoAuth');
-    return stored ? JSON.parse(stored) : null;
-  });
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};
 
-  const navigate = useNavigate();
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  function login(data: AuthUser) {
-    // data contains { token, username, role, user_id }
-    setUser(data);
-    localStorage.setItem('promoAuth', JSON.stringify(data));
-    // After login, redirect into dashboard home (e.g. /draws)
-    navigate('/draws');
-  }
+  useEffect(() => {
+    const bootstrapAuth = () => {
+        const storedToken = localStorage.getItem('authToken');
+        if (storedToken) {
+            try {
+                const decoded = jwtDecode<DecodedToken>(storedToken);
+                if (decoded.exp * 1000 > Date.now()) {
+                    setToken(storedToken);
+                    setUser({ id: decoded.user_id, username: decoded.username, role: decoded.role });
+                } else {
+                    localStorage.removeItem('authToken');
+                }
+            } catch (error) {
+                console.error('Failed to decode token:', error);
+                localStorage.removeItem('authToken');
+            }
+        }
+        setIsLoading(false);
+    };
+    bootstrapAuth();
+  }, []);
 
-  function logout() {
+  const login = async (payload: authService.LoginRequest) => {
+    const response = await authService.login(payload);
+    const decoded = jwtDecode<DecodedToken>(response.token);
+    
+    localStorage.setItem('authToken', response.token);
+    setToken(response.token);
+    setUser({ id: decoded.user_id, username: decoded.username, role: decoded.role });
+  };
+
+  const logout = () => {
+    localStorage.removeItem('authToken');
+    setToken(null);
     setUser(null);
-    localStorage.removeItem('promoAuth');
-    navigate('/login');
+  };
+
+  const value = { token, user, login, logout, isLoading };
+
+  if (isLoading) {
+    return <div>Loading Application...</div>;
   }
 
-  function getToken() {
-    return user?.token || null;
-  }
-
-  return (
-    <AuthContext.Provider value={{ user, login, logout, getToken }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuthContext() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuthContext must be used within AuthProvider');
-  }
-  return ctx;
-}
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};

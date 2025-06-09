@@ -1,27 +1,26 @@
-// src/services/apiClient.ts
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { getToken } from '@hooks/useAuth';
+import axios, { InternalAxiosRequestConfig } from 'axios';
 
-/**
- * Base URL for all API calls. 
- * If VITE_API_BASE_URL is set (e.g. on Vercel), we use that;
- * otherwise default to local dev.
- */
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
 
-export const apiClient: AxiosInstance = axios.create({
-  baseURL: API_BASE,
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-apiClient.interceptors.request.use((config: AxiosRequestConfig) => {
-  const token = getToken();
-  if (token && config.headers) {
-    config.headers['Authorization'] = `Bearer ${token}`;
+// Add a request interceptor to include the auth token
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 export default apiClient;

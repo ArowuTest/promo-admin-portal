@@ -1,25 +1,30 @@
-import React from "react";
-import { Navigate, Outlet } from "react-router-dom";
-import { useAuthContext } from "@contexts/AuthContext";
+import React from 'react';
+import { Navigate, useLocation, Outlet } from 'react-router-dom';
+import { useAuth } from '@contexts/AuthContext';
 
 interface ProtectedRouteProps {
-  allowedRoles: string[];
+  children?: React.ReactNode;
+  allowedRoles?: string[];
 }
 
-export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  // Replace "useAuthContext" with whatever hook your AuthContext file actually provides
-  const { token, role } = useAuthContext();
+export default function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
+  const { user, token } = useAuth();
+  const location = useLocation();
 
-  // If there's no token at all, force login screen
-  if (!token) {
-    return <Navigate to="/login" replace />;
+  if (!token || !user) {
+    // Not logged in, redirect to login page, but save the location they were trying to go to.
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // If role is not among allowedRoles, also redirect to login (or an unauthorized page)
-  if (allowedRoles.length > 0 && !allowedRoles.includes(role!)) {
-    return <Navigate to="/login" replace />;
+  // If allowedRoles are specified, check if the user's role is included.
+  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    // User is logged in but does not have the required role.
+    // Redirect to a safe default page (the main dashboard).
+    return <Navigate to="/" replace />;
   }
 
-  // Otherwise render child routes
-  return <Outlet />;
+  // If the component has children passed to it (e.g., <ProtectedRoute><Page/></ProtectedRoute>), render them.
+  // Otherwise, if it's used as a layout route (e.g., <Route element={<ProtectedRoute/>}>), render the Outlet.
+  // This makes the component flexible for both uses in App.tsx.
+  return children ? <>{children}</> : <Outlet />;
 }
